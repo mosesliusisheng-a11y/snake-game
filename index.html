@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Cyberpunk Snake</title>
+    <link href="https://googleapis.com" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0d0d1a;
+            color: #00ffff;
+            font-family: 'Press Start 2P', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            touch-action: manipulation; 
+        }
+        
+        h1 { 
+            margin: 5px 0; 
+            font-size: 1.1rem; 
+            text-shadow: 0 0 10px #00ffff;
+            text-align: center;
+        }
+
+        .game-container {
+            position: relative;
+            width: 340px;
+            height: 340px;
+            max-width: 85vw;
+            max-height: 40vh;
+        }
+        
+        canvas {
+            border: 4px solid #ff007f;
+            background-color: #05050a;
+            width: 100%;
+            height: 100%;
+            box-shadow: 0 0 15px #ff007f;
+        }
+
+        #menuScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(5, 5, 10, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .menu-title {
+            font-size: 12px;
+            margin-bottom: 20px;
+            color: #ffff00;
+            text-shadow: 0 0 8px #ffff00;
+        }
+
+        .menu-btn {
+            background: none;
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            font-family: 'Press Start 2P', monospace;
+            padding: 10px;
+            margin: 8px 0;
+            width: 180px;
+            font-size: 10px;
+            cursor: pointer;
+            border-radius: 6px;
+            box-shadow: 0 0 5px #00ffff;
+        }
+
+        #btnEasy { border-color: #00ff00; color: #00ff00; }
+        #btnMedium { border-color: #ffff00; color: #ffff00; }
+        #btnHard { border-color: #ff007f; color: #ff007f; }
+        
+        .score-board {
+            display: flex;
+            justify-content: space-between;
+            width: 85vw;
+            max-width: 340px;
+            margin: 10px 0;
+            font-size: 10px;
+        }
+        
+        #score { text-shadow: 0 0 8px #00ffff; }
+        #highScore { text-shadow: 0 0 8px #ffff00; color: #ffff00; }
+
+        /* 🕹️ Bulletproof D-Pad Layout */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 75px);
+            grid-template-rows: repeat(3, 75px);
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .btn {
+            background-color: #12122b;
+            border: 3px solid #00ffff;
+            color: #00ffff;
+            font-size: 24px;
+            border-radius: 50%; /* Rounded buttons feel amazing on fingers */
+            display: flex;
+            flex-items: center;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            box-shadow: 0 0 8px #00ffff;
+        }
+        /* Color themes for buttons */
+        .up { grid-column: 2; grid-row: 1; border-color: #ffff00; color: #ffff00; box-shadow: 0 0 8px #ffff00; }
+        .left { grid-column: 1; grid-row: 2; border-color: #00ffff; color: #00ffff; box-shadow: 0 0 8px #00ffff; }
+        .right { grid-column: 3; grid-row: 2; border-color: #00ff00; color: #00ff00; box-shadow: 0 0 8px #00ff00; }
+        .down { grid-column: 2; grid-row: 3; border-color: #ff007f; color: #ff007f; box-shadow: 0 0 8px #ff007f; }
+    </style>
+</head>
+<body>
+
+    <h1>NEON SNAKE</h1>
+    
+    <div class="game-container">
+        <div id="menuScreen">
+            <div class="menu-title">SELECT SPEED</div>
+            <button class="menu-btn" id="btnEasy">EASY</button>
+            <button class="menu-btn" id="btnMedium">MEDIUM</button>
+            <button class="menu-btn" id="btnHard">HARD</button>
+        </div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <div class="score-board">
+        <div id="score">SCORE: 0</div>
+        <div id="highScore">BEST: 0</div>
+    </div>
+    
+    <!-- Heavy Duty Touch Buttons -->
+    <div class="controls">
+        <div class="btn up" id="btnUp">▲</div>
+        <div class="btn left" id="btnLeft">◀</div>
+        <div class="btn right" id="btnRight">▶</div>
+        <div class="btn down" id="btnDown">▼</div>
+    </div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const scoreElement = document.getElementById("score");
+const highScoreElement = document.getElementById("highScore");
+const menuScreen = document.getElementById("menuScreen");
+
+const gridSize = 20;
+const tileCount = canvas.width / gridSize;
+
+// Fixed array access formatting error from earlier
+let snake = [{x: 10, y: 10}];
+let food = {x: 5, y: 5};
+let dx = 1;
+let dy = 0;
+let score = 0;
+let gameSpeed = 200;
+
+let savedHighScore = localStorage.getItem("snakeHighScore") || 0;
+highScoreElement.innerText = "BEST: " + savedHighScore;
+
+function main() {
+    if (hasGameEnded()) {
+        if (score > savedHighScore) {
+            localStorage.setItem("snakeHighScore", score);
+            alert("NEW HIGH SCORE!\nFINAL SCORE: " + score);
+        } else {
+            alert("GAME OVER\nFINAL SCORE: " + score);
+        }
+        document.location.reload();
+        return;
+    }
+
+    setTimeout(function onTick() {
+        clearCanvas();
+        drawFood();
+        moveSnake();
+        drawSnake();
+        main();
+    }, gameSpeed);
+}
+
+function startGame(speed) {
+    gameSpeed = speed;
+    menuScreen.style.display = "none";
+    generateFood();
+    main();
+}
+
+// Click and tap handlers combined
+document.getElementById("btnEasy").addEventListener("click", () => startGame(300));
+document.getElementById("btnMedium").addEventListener("click", () => startGame(180));
+document.getElementById("btnHard").addEventListener("click", () => startGame(90));
+
+function clearCanvas() {
+    ctx.fillStyle = "#05050a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawSnake() {
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "#00ffff";
+    ctx.fillStyle = "#00ffff";
+    snake.forEach(part => {
+        ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2);
+    });
+    ctx.shadowBlur = 0;
+}
+
+function moveSnake() {
+    // Array index fix
+    let newX = snake[0].x + dx;
+    let newY = snake[0].y + dy;
+
+    if (newX < 0) newX = tileCount - 1;
+    if (newX >= tileCount) newX = 0;
+    if (newY < 0) newY = tileCount - 1;
+    if (newY >= tileCount) newY = 0;
+
+    const head = {x: newX, y: newY};
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        scoreElement.innerText = "SCORE: " + score;
+        generateFood();
+    } else {
+        snake.pop();
+    }
+}
+
+function generateFood() {
+    food.x = Math.floor(Math.random() * tileCount);
+    food.y = Math.floor(Math.random() * tileCount);
+    snake.forEach(part => {
+        if (part.x === food.x && part.y === food.y) generateFood();
+    });
+}
+
+function drawFood() {
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#ff007f";
+    ctx.fillStyle = "#ff007f";
+    ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+    ctx.shadowBlur = 0;
+}
+
+function hasGameEnded() {
+    const head = snake[0];
+    for (let i = 4; i < snake.length; i++) {
+        if (snake[i].x === head.x && snake[i].y === head.y) return true;
+    }
+    return false;
+}
+
+function setDirection(dir) {
+    const goingUp = dy === -1;
+    const goingDown = dy === 1;
+    const goingRight = dx === 1;
+    const goingLeft = dx === -1;
+
+    if (dir === "LEFT" && !goingRight) { dx = -1; dy = 0; }
+    if (dir === "UP" && !goingDown)    { dx = 0; dy = -1; }
+    if (dir === "RIGHT" && !goingLeft) { dx = 1; dy = 0; }
+    if (dir === "DOWN" && !goingUp)    { dx = 0; dy = 1; }
+}
+
+// Universal click/touch handler that mobile operating systems cannot block
+const handleDirectionPress = (dir) => (e) => {
+    e.preventDefault();
+    setDirection(dir);
+};
+
+document.getElementById("btnUp").addEventListener("pointerdown", handleDirectionPress("UP"));
+document.getElementById("btnDown").addEventListener("pointerdown", handleDirectionPress("DOWN"));
+document.getElementById("btnLeft").addEventListener("pointerdown", handleDirectionPress("LEFT"));
+document.getElementById("btnRight").addEventListener("pointerdown", handleDirectionPress("RIGHT"));
+
+document.addEventListener("keydown", (e) => {
+    if (e.keyCode === 37) setDirection("LEFT");
+    if (e.keyCode === 38) setDirection("UP");
+    if (e.keyCode === 39) setDirection("RIGHT");
+    if (e.keyCode === 40) setDirection("DOWN");
+});
+</script>
+</body>
+</html>
